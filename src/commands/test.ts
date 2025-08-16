@@ -2,7 +2,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
-import { MockAISchemaGenerator } from '../ai/schema-generator';
+import { MockAISchemaGenerator } from '../ai/mock-schema-generator';
 import { ProjectManager } from '../utils/project-manager';
 import { Estimator } from '../agents/estimator';
 import { Engine } from '../engine';

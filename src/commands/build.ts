@@ -3,7 +3,7 @@ import { join } from 'path';
 import chalk from 'chalk';
 import Table from 'cli-table3';
 import { ProjectSchema, type ProjectType } from '../schemas/v0';
-import { MockAISchemaGenerator } from '../ai/schema-generator';
+import { MockAISchemaGenerator } from '../ai/mock-schema-generator';
 import { ProjectManager } from '../utils/project-manager';
 import { Estimator } from '../agents/estimator';
 import { Engine } from '../engine';

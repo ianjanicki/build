@@ -78,8 +78,8 @@ src/
 │   ├── run.ts        # Plan execution
 │   └── test.ts       # Evaluation system
 ├── ai/
-│   ├── real-schema-generator.ts  # OpenAI integration
-│   └── schema-generator.ts       # Mock AI generator
+│   ├── ai-schema-generator.ts      # AI SDK integration (model-agnostic)
+│   └── mock-schema-generator.ts    # Mock AI generator
 ├── types/0.0.0/      # Versioned type definitions
 ├── schemas/v0.ts     # Zod validation schemas
 └── utils/            # Project management utilities
