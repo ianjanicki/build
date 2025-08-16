@@ -1,0 +1,176 @@
+{
+  "planEvaluations": [
+    {
+      "id": "simple-furniture-assembly",
+      "name": "Simple Furniture Assembly",
+      "prompt": "I want to assemble an IKEA Malm bed frame with headboard. I have a 12x15 foot bedroom with good lighting and power available. My budget is $100. I don't have any tools. Workers can access my apartment with a key code. I need this done within a week.",
+      "expectedOutcomes": {
+        "totalHours": {
+          "min": 2.0,
+          "max": 4.0,
+          "reasoning": "Basic furniture assembly typically takes 2-4 hours"
+        },
+        "totalCost": {
+          "min": 60,
+          "max": 120,
+          "reasoning": "Should fit within $100 budget, accounting for tool rental if needed"
+        },
+        "taskCount": {
+          "min": 3,
+          "max": 5,
+          "reasoning": "Should include preparation, assembly, and quality check tasks"
+        },
+        "requiredSkills": [
+          "assembly",
+          "basic_tools"
+        ],
+        "constraints": [
+          "tool_availability"
+        ]
+      },
+      "evaluationCriteria": [
+        "Plan includes space preparation if workspace is limited",
+        "Plan accounts for tool requirements",
+        "Cost estimates are realistic for the market",
+        "Tasks have logical dependencies",
+        "Safety considerations are included"
+      ]
+    },
+    {
+      "id": "complex-deck-construction",
+      "name": "Complex Deck Construction",
+      "prompt": "I need to build a 12x16 foot wooden deck with stairs in my backyard. The backyard is accessible through a gate. I have a $3000 budget. The project needs to comply with local building codes. I want it completed within 2 weeks. The ground is level and there's good access for materials.",
+      "expectedOutcomes": {
+        "totalHours": {
+          "min": 20.0,
+          "max": 40.0,
+          "reasoning": "Deck construction is a complex project requiring significant time"
+        },
+        "totalCost": {
+          "min": 2000,
+          "max": 3500,
+          "reasoning": "Materials and labor for deck construction typically cost $2000-3500"
+        },
+        "taskCount": {
+          "min": 8,
+          "max": 15,
+          "reasoning": "Complex construction projects have many subtasks"
+        },
+        "requiredSkills": [
+          "construction",
+          "carpentry",
+          "permit_management"
+        ],
+        "constraints": [
+          "building_codes",
+          "weather_dependent"
+        ]
+      },
+      "evaluationCriteria": [
+        "Plan includes permit acquisition",
+        "Plan accounts for weather delays",
+        "Safety requirements are comprehensive",
+        "Material calculations are realistic",
+        "Timeline accounts for inspections"
+      ]
+    },
+    {
+      "id": "kitchen-backsplash-installation",
+      "name": "Kitchen Backsplash Installation",
+      "prompt": "I want to install a subway tile backsplash in my kitchen. The area is 3 feet high and 8 feet wide. I have power tools available. The kitchen is on the first floor with easy access. My budget is $500. I need this done within 3 days.",
+      "expectedOutcomes": {
+        "totalHours": {
+          "min": 6.0,
+          "max": 12.0,
+          "reasoning": "Tile installation requires precision and time for proper setting"
+        },
+        "totalCost": {
+          "min": 300,
+          "max": 600,
+          "reasoning": "Materials and labor for tile backsplash typically cost $300-600"
+        },
+        "taskCount": {
+          "min": 4,
+          "max": 7,
+          "reasoning": "Tile installation has several distinct phases"
+        },
+        "requiredSkills": [
+          "tile_installation",
+          "grouting",
+          "measurement"
+        ],
+        "constraints": [
+          "curing_time",
+          "precision_required"
+        ]
+      },
+      "evaluationCriteria": [
+        "Plan includes surface preparation",
+        "Plan accounts for tile cutting and layout",
+        "Curing time is considered in timeline",
+        "Material waste is accounted for",
+        "Quality control steps are included"
+      ]
+    }
+  ],
+  "executeEvaluations": [
+    {
+      "id": "task-execution-flow",
+      "name": "Task Execution Flow",
+      "description": "Test the execution flow and task state management",
+      "planFile": ".output/simple_furniture_assembly/project.json",
+      "expectedOutcomes": {
+        "completedTasks": {
+          "min": 2,
+          "max": 3,
+          "reasoning": "Should complete most tasks in the plan"
+        },
+        "executionTime": {
+          "min": 1000,
+          "max": 10000,
+          "reasoning": "Execution should take reasonable time"
+        },
+        "stateTransitions": [
+          "PLAN",
+          "EXECUTE", 
+          "COMPLETED"
+        ]
+      },
+      "evaluationCriteria": [
+        "All tasks transition through proper states",
+        "Execution log is properly maintained",
+        "Project state is updated correctly",
+        "Task dependencies are respected"
+      ]
+    },
+    {
+      "id": "interactive-execution",
+      "name": "Interactive Execution",
+      "description": "Test interactive task selection and modification",
+      "planFile": ".output/simple_furniture_assembly/project.json",
+      "options": {
+        "interactive": true,
+        "modify": true,
+        "dryRun": true
+      },
+      "expectedOutcomes": {
+        "userInteractions": {
+          "min": 1,
+          "max": 5,
+          "reasoning": "Should prompt user for task selection and modifications"
+        },
+        "taskModifications": {
+          "min": 0,
+          "max": 2,
+          "reasoning": "User may choose to modify some tasks"
+        }
+      },
+      "evaluationCriteria": [
+        "User can select which task to execute next",
+        "User can modify task estimates during execution",
+        "User can skip tasks during execution",
+        "User can add new tasks during execution"
+      ]
+    }
+  ]
+}
