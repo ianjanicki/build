@@ -135,18 +135,28 @@ The system scales to handle:
 
 ## AI Integration
 
-### OpenAI (Optional)
-Set `OPENAI_API_KEY` environment variable to use real AI:
+### AI Integration (Coming Soon)
+The system is designed to support multiple AI providers through the AI SDK:
+
 ```bash
+# OpenAI
 export OPENAI_API_KEY=your_key_here
+
+# Anthropic (future)
+export ANTHROPIC_API_KEY=your_key_here
+
+# Local models (future)
+export OLLAMA_HOST=http://localhost:11434
 ```
 
-### Mock Mode (Default)
-Without an API key, the system uses intelligent mock generators that simulate:
+### Mock Mode (Current Default)
+Currently using intelligent mock generators that simulate:
 - Project specification generation
 - Task planning
 - Follow-up questions
 - Tool requirements
+
+The AI SDK integration is ready but needs final testing with the latest SDK version.
 
 ## Testing
 

@@ -17,12 +17,15 @@ import {
 // Model configuration - can be easily swapped
 const MODEL_CONFIG = {
   // OpenAI models
-  'gpt-4o': openai.gpt4o,
-  'gpt-4o-mini': openai.gpt4oMini,
-  'gpt-4-turbo': openai.gpt4Turbo,
+  'gpt-5': 'gpt-5',
+  'gpt-4o': 'gpt-4o',
+  'gpt-4o-mini': 'gpt-4o-mini',
+  'gpt-4-turbo': 'gpt-4-turbo',
+  'gpt-4': 'gpt-4',
+  'gpt-3.5-turbo': 'gpt-3.5-turbo',
   
   // Default fallback
-  'default': openai.gpt4oMini
+  'default': 'gpt-4o-mini'
 };
 
 export interface AISchemaGenerator {
@@ -94,8 +97,9 @@ export class AISchemaGenerator implements AISchemaGenerator {
     return process.env.OPENAI_API_KEY || '';
   }
 
-  private getModelId(): string {
-    return MODEL_CONFIG[this.model as keyof typeof MODEL_CONFIG] || MODEL_CONFIG.default;
+  private getModelId() {
+    const modelId = MODEL_CONFIG[this.model as keyof typeof MODEL_CONFIG] || MODEL_CONFIG.default;
+    return openai.chat(modelId);
   }
 
   async generateProjectSpec(userInput: string): Promise<{
