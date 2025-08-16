@@ -1,4 +1,4 @@
-import type { LaborAdapter, LaborBid } from '../../../types';
+import type { LaborAdapter, LaborBid } from '../../types';
 
 export abstract class BaseLaborAdapter implements LaborAdapter {
   abstract postJob(description: string, photos: string[]): Promise<string>;

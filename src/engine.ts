@@ -49,7 +49,7 @@ export class Engine {
     console.log(chalk.green('✅ All tasks completed successfully!'));
   }
   
-  private getReadyTasks(taskPlan: TaskPlan, executedTasks: Set<string>): Task[] {
+  protected getReadyTasks(taskPlan: TaskPlan, executedTasks: Set<string>): Task[] {
     return taskPlan.tasks.filter(task => {
       // Task is ready if all dependencies are executed
       return !executedTasks.has(task.id) && 
@@ -57,7 +57,7 @@ export class Engine {
     });
   }
   
-  private async executeTask(task: Task, project: Project, options: ExecutionOptions): Promise<void> {
+  protected async executeTask(task: Task, project: Project, options: ExecutionOptions): Promise<void> {
     console.log(chalk.cyan(`\n🔄 Executing: ${task.name}`));
     console.log(chalk.gray(`   ${task.description}`));
     

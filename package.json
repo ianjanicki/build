@@ -8,11 +8,11 @@
     "build": "tsc",
     "dev": "tsx src/cli.ts dev",
     "start": "node dist/cli.js",
-    "test": "tsx src/cli.ts test",
+    "test": "vitest",
+    "eval": "tsx src/cli.ts eval",
     "plan": "tsx src/cli.ts plan --interactive",
     "run": "tsx src/cli.ts run",
-    "interactive": "tsx src/cli.ts interactive",
-    "eval": "tsx src/cli.ts test"
+    "interactive": "tsx src/cli.ts interactive"
   },
   "keywords": [
     "orchestration",

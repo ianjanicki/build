@@ -1,2 +1,2 @@
-// Re-export all types directly
-export * from './types/index.d.ts';
+// Barrel export for all types
+export * from './types/index.d';

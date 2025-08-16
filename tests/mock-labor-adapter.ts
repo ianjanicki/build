@@ -1,4 +1,4 @@
-import type { LaborBid, Money } from '../types';
+import type { LaborBid, Money } from '../src/types';
 import { BaseLaborAdapter } from '../src/adapters/labor/base';
 
 export class MockLaborAdapter extends BaseLaborAdapter {

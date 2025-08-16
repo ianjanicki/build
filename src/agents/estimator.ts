@@ -1,4 +1,4 @@
-import type { Project, Task, TaskPlan, Money, SkillTierPricing } from '../types';
+import type { Project, Task, TaskPlan, SkillTierPricing, Money } from '../types';
 import { Currency, RequirementLevel } from '../types';
 
 export class Estimator {
@@ -15,7 +15,7 @@ export class Estimator {
     
     return {
       ...taskPlan,
-      tasks: estimatedTasks,
+      tasks: estimatedTasks as Task[],
       estimatedCost: {
         amount: totalCost,
         currency: project.project.budget.currency,
@@ -53,7 +53,7 @@ export class Estimator {
     
     return {
       amount: Math.round(totalCost * 100), // Convert to cents
-      currency: skillTier.currency,
+      currency: skillTier.currency as Currency,
     };
   }
   

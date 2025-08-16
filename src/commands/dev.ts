@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { plan } from './plan';
 import { run } from './run';
-import { test } from './test';
+import { runEvaluations } from './eval';
 import { ProjectStatus } from '../types';
 
 interface PlanInfo {
@@ -48,7 +48,7 @@ export async function dev() {
   if (selected === 'new') {
     await plan(undefined, { interactive: true });
   } else if (selected === 'test') {
-    await test();
+    await runEvaluations();
   } else {
     const { plan: selectedPlan, action } = selected;
     await executePlan(selectedPlan);

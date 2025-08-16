@@ -3,11 +3,11 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { build } from './commands/build';
-import { test } from './commands/test';
-import { interactive } from './commands/interactive';
-import { plan } from './commands/plan';
-import { run } from './commands/run';
-import { dev } from './commands/dev';
+import { runEvaluations } from './commands/eval'; // Renamed import
+import { interactive } from './commands/interactive'; // Still imported for 'build --interactive'
+import { plan } from './commands/plan'; // New
+import { run } from './commands/run';   // New
+import { dev } from './commands/dev';   // New
 
 const program = new Command();
 
@@ -17,11 +17,11 @@ program
   .version('0.1.0');
 
 program
-  .command('test')
-  .description('Run automated tests')
+  .command('eval')
+  .description('Run AI evaluations to test plan quality and execution flow')
   .action(async () => {
     try {
-      await test();
+      await runEvaluations();
     } catch (error) {
       console.error(chalk.red('Error:'), error instanceof Error ? error.message : error);
       process.exit(1);
