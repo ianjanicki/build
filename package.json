@@ -12,7 +12,10 @@
     "eval": "tsx src/cli.ts eval",
     "plan": "tsx src/cli.ts plan --interactive",
     "run": "tsx src/cli.ts run",
-    "interactive": "tsx src/cli.ts interactive"
+    "interactive": "tsx src/cli.ts interactive",
+    "clean": "rm -rf .output/* && rm -rf dist/* && echo '🧹 Cleaned output and dist directories'",
+    "clean:output": "rm -rf .output/* && echo '🧹 Cleaned output directory'",
+    "clean:dist": "rm -rf dist/* && echo '🧹 Cleaned dist directory'"
   },
   "keywords": [
     "orchestration",

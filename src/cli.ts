@@ -8,6 +8,8 @@ import { interactive } from './commands/interactive'; // Still imported for 'bui
 import { plan } from './commands/plan'; // New
 import { run } from './commands/run';   // New
 import { dev } from './commands/dev';   // New
+import { rmSync } from 'fs';
+import { join } from 'path';
 
 const program = new Command();
 
@@ -15,6 +17,28 @@ program
   .name('build')
   .description('Agent orchestration platform for physical world tasks')
   .version('0.1.0');
+
+program
+  .command('clean')
+  .description('Clean output directories (useful during rapid iteration)')
+  .option('-o, --output', 'Clean only output directory')
+  .option('-d, --dist', 'Clean only dist directory')
+  .action(async (options) => {
+    try {
+      if (options.output || (!options.output && !options.dist)) {
+        rmSync(join(process.cwd(), '.output'), { recursive: true, force: true });
+        console.log(chalk.green('🧹 Cleaned output directory'));
+      }
+      
+      if (options.dist || (!options.output && !options.dist)) {
+        rmSync(join(process.cwd(), 'dist'), { recursive: true, force: true });
+        console.log(chalk.green('🧹 Cleaned dist directory'));
+      }
+    } catch (error) {
+      console.error(chalk.red('Error:'), error instanceof Error ? error.message : error);
+      process.exit(1);
+    }
+  });
 
 program
   .command('eval')

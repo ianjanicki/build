@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import inquirer from 'inquirer';
-import { readdirSync, readFileSync } from 'fs';
+import { readdirSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { plan } from './plan';
 import { run } from './run';
@@ -33,7 +33,8 @@ export async function dev() {
       name: `[${p.status}] ${p.name}`,
       value: { plan: p, action: 'execute' }
     })),
-    { name: '🧪 Run evaluations', value: 'test' }
+    { name: '🧪 Run evaluations', value: 'test' },
+    { name: '🧹 Clean output files', value: 'clean' }
   ];
 
   const { selected } = await inquirer.prompt([
@@ -49,6 +50,9 @@ export async function dev() {
     await plan(undefined, { interactive: true });
   } else if (selected === 'test') {
     await runEvaluations();
+  } else if (selected === 'clean') {
+    rmSync(join(process.cwd(), '.output'), { recursive: true, force: true });
+    console.log(chalk.green('🧹 Cleaned output directory'));
   } else {
     const { plan: selectedPlan, action } = selected;
     await executePlan(selectedPlan);
@@ -108,40 +112,44 @@ async function executePlan(planInfo: PlanInfo) {
 function getAvailablePlans(): PlanInfo[] {
   const outputDir = join(process.cwd(), '.output');
   
-  if (!readdirSync(outputDir, { withFileTypes: true }).some(d => d.isDirectory())) {
+  try {
+    if (!readdirSync(outputDir)) {
+      return [];
+    }
+  } catch (error) {
+    // Directory doesn't exist, return empty array
     return [];
   }
-
+  
   const plans: PlanInfo[] = [];
-
+  
   try {
     const projectDirs = readdirSync(outputDir, { withFileTypes: true })
-      .filter(d => d.isDirectory())
-      .map(d => d.name);
-
+      .filter(dirent => dirent.isDirectory())
+      .map(dirent => dirent.name);
+    
     for (const dir of projectDirs) {
       const projectPath = join(outputDir, dir, 'project.json');
-      
       try {
-        const projectData = JSON.parse(readFileSync(projectPath, 'utf-8'));
+        const content = readFileSync(projectPath, 'utf-8');
+        const data = JSON.parse(content);
         
         plans.push({
-          name: projectData.project.name,
+          name: data.project.name,
           path: projectPath,
-          status: projectData.state.currentPhase,
-          lastModified: projectData.metadata.lastModified,
-          description: projectData.project.description.substring(0, 50) + '...'
+          status: data.state.currentPhase,
+          lastModified: data.metadata.lastModified,
+          description: data.project.description
         });
       } catch (error) {
         // Skip invalid project files
-        console.warn(chalk.yellow(`Warning: Invalid project file in ${dir}`));
+        continue;
       }
     }
-
-    // Sort by last modified (newest first)
-    return plans.sort((a, b) => b.lastModified - a.lastModified);
   } catch (error) {
-    console.error(chalk.red('Error reading plans:', error));
+    // Directory doesn't exist or can't be read
     return [];
   }
+  
+  return plans.sort((a, b) => b.lastModified - a.lastModified);
 }

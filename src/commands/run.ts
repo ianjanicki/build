@@ -15,63 +15,83 @@ interface RunOptions {
 }
 
 export async function run(planPath: string, options: RunOptions) {
-  console.log(chalk.blue('🚀 Build Agent - Plan Executor'));
-  console.log(chalk.gray('Executing project plan with async workflow...\n'));
-
-  // Load the plan
   const project = loadPlan(planPath);
   
-  console.log(chalk.green('✓ Plan loaded successfully'));
-  console.log(chalk.white(`Project: ${project.project.name}`));
-  console.log(chalk.white(`Status: ${project.state.currentPhase}`));
-
-  // Check if plan is ready for execution
-  if (project.state.currentPhase !== ProjectStatus.PLAN) {
-    console.log(chalk.yellow('⚠️  Plan is not in PLANNING phase. Current phase: ' + project.state.currentPhase));
-    
-    const { shouldContinue } = await inquirer.prompt([
-      {
-        type: 'confirm',
-        name: 'shouldContinue',
-        message: 'Do you want to continue with execution anyway?',
-        default: false
-      }
-    ]);
-
-    if (!shouldContinue) {
-      console.log(chalk.gray('Execution cancelled.'));
-      return;
-    }
-  }
-
+  // Display project essentials
+  console.log(chalk.blue('\n🏗️  Project Execution'));
+  console.log(chalk.gray('Starting execution with state machine workflow...\n'));
+  
+  console.log(chalk.cyan('📋 Project:'), project.project.name);
+  console.log(chalk.cyan('📍 Location:'), `${project.project.location.address.street}, ${project.project.location.address.city}`);
+  console.log(chalk.cyan('💰 Budget:'), `$${(project.project.budget.total.amount / 100).toFixed(2)}`);
+  console.log(chalk.cyan('📅 Timeline:'), `${Math.ceil((project.project.timeline.targetEndDate - project.project.timeline.startDate) / (24 * 60 * 60 * 1000))} days`);
+  console.log(chalk.cyan('📊 Status:'), project.state.currentPhase);
+  
+  console.log(chalk.cyan('\n📋 Tasks:'), `${project.plan.tasks.length} tasks to execute`);
+  console.log(chalk.cyan('💰 Estimate:'), `${project.plan.estimatedDuration}h, $${(project.plan.estimatedCost.amount / 100).toFixed(2)}`);
+  console.log(chalk.cyan('⚠️  Approval Points:'), project.policy.humanApprovalPoints.join(', '));
+  
   // Pre-execution checks
-  await performPreExecutionChecks(project, options);
-
+  console.log(chalk.blue('\n🔍 Pre-execution checks...'));
+  
+  // Check budget
+  if (project.plan.estimatedCost.amount > project.project.budget.total.amount) {
+    console.log(chalk.red('❌ Budget exceeded!'));
+    console.log(chalk.gray(`   Estimated: $${(project.plan.estimatedCost.amount / 100).toFixed(2)}`));
+    console.log(chalk.gray(`   Budget: $${(project.project.budget.total.amount / 100).toFixed(2)}`));
+    
+    if (!options.approveAll) {
+      const { proceed } = await inquirer.prompt([
+        {
+          type: 'confirm',
+          name: 'proceed',
+          message: 'Proceed despite budget overrun?',
+          default: false
+        }
+      ]);
+      if (!proceed) {
+        console.log(chalk.yellow('Execution cancelled.'));
+        return;
+      }
+    }
+  } else {
+    console.log(chalk.green('✓ Budget check passed'));
+  }
+  
+  // Check timeline
+  const daysToComplete = Math.ceil(project.plan.estimatedDuration / 8); // Assume 8 hours per day
+  const availableDays = Math.ceil((project.project.timeline.targetEndDate - Date.now()) / (24 * 60 * 60 * 1000));
+  
+  if (daysToComplete > availableDays) {
+    console.log(chalk.red('❌ Timeline exceeded!'));
+    console.log(chalk.gray(`   Required: ${daysToComplete} days`));
+    console.log(chalk.gray(`   Available: ${availableDays} days`));
+    
+    if (!options.approveAll) {
+      const { proceed } = await inquirer.prompt([
+        {
+          type: 'confirm',
+          name: 'proceed',
+          message: 'Proceed despite timeline overrun?',
+          default: false
+        }
+      ]);
+      if (!proceed) {
+        console.log(chalk.yellow('Execution cancelled.'));
+        return;
+      }
+    }
+  } else {
+    console.log(chalk.green('✓ Timeline check passed'));
+  }
+  
+  console.log(chalk.green('✓ Pre-execution checks passed\n'));
+  
   // Start execution
-  console.log(chalk.blue('\n🚀 Starting execution...'));
+  console.log(chalk.blue('🚀 Starting execution...'));
   
   const engine = new AsyncEngine();
-  const projectManager = new ProjectManager();
-
-  try {
-    await engine.executeAsync(project, {
-      approveAll: options.approveAll || false,
-      dryRun: options.dryRun || false,
-      interactive: options.interactive || false,
-      modify: options.modify || false
-    });
-
-    // Save updated project state
-    const projectDir = projectManager.createProjectDirectory(project.project.name);
-    projectManager.saveProjectSchema(projectDir, project as any);
-
-    console.log(chalk.green('\n✅ Execution completed successfully!'));
-    console.log(chalk.cyan(`📁 Updated project saved to: ${projectDir}`));
-
-  } catch (error) {
-    console.error(chalk.red('\n❌ Execution failed:'), error);
-    process.exit(1);
-  }
+  await engine.executeAsync(project, options);
 }
 
 function loadPlan(planPath: string): any {

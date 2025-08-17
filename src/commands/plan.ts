@@ -16,7 +16,27 @@ interface PlanOptions {
 function loadProject(projectPath: string): any {
   const content = readFileSync(projectPath, 'utf-8');
   const data = JSON.parse(content);
-  return ProjectSchema.parse(data);
+  
+  // Migrate old projects that might be missing required fields
+  const migratedData = migrateProjectData(data);
+  
+  return ProjectSchema.parse(migratedData);
+}
+
+function migrateProjectData(data: any): any {
+  const migrated = JSON.parse(JSON.stringify(data)); // Deep clone
+  
+  // Add missing country field if not present
+  if (migrated.project?.location?.address && !migrated.project.location.address.country) {
+    migrated.project.location.address.country = 'USA';
+  }
+  
+  // Add other missing required fields as needed
+  if (migrated.project?.location?.address && !migrated.project.location.address.street) {
+    migrated.project.location.address.street = 'Unknown';
+  }
+  
+  return migrated;
 }
 
 function saveProject(project: any, outputPath: string): void {
@@ -77,14 +97,30 @@ async function createProjectInteractively(): Promise<any> {
     {
       type: 'input',
       name: 'name',
-      message: 'What would you like to build?',
-      default: 'My Project'
+      message: 'What would you like to build? (required):',
+      validate: (input) => {
+        if (!input || input.trim().length === 0) {
+          return 'Project name is required';
+        }
+        if (input.trim().length < 3) {
+          return 'Project name must be at least 3 characters';
+        }
+        return true;
+      }
     },
     {
       type: 'input',
       name: 'description',
-      message: 'Describe your project:',
-      default: 'A new project'
+      message: 'Describe your project (required):',
+      validate: (input) => {
+        if (!input || input.trim().length === 0) {
+          return 'Project description is required';
+        }
+        if (input.trim().length < 10) {
+          return 'Please provide a more detailed description (at least 10 characters)';
+        }
+        return true;
+      }
     }
   ]);
 
@@ -93,26 +129,63 @@ async function createProjectInteractively(): Promise<any> {
     {
       type: 'input',
       name: 'street',
-      message: 'Street address:',
-      default: '123 Main St'
+      message: 'Street address (required):',
+      validate: (input) => {
+        if (!input || input.trim().length === 0) {
+          return 'Street address is required';
+        }
+        return true;
+      }
     },
     {
       type: 'input',
       name: 'city',
-      message: 'City:',
-      default: 'Anytown'
+      message: 'City (required):',
+      validate: (input) => {
+        if (!input || input.trim().length === 0) {
+          return 'City is required';
+        }
+        return true;
+      }
     },
     {
       type: 'input',
       name: 'state',
-      message: 'State:',
-      default: 'CA'
+      message: 'State/Province (required):',
+      validate: (input) => {
+        if (!input || input.trim().length === 0) {
+          return 'State/Province is required';
+        }
+        return true;
+      }
     },
     {
       type: 'input',
       name: 'zipCode',
-      message: 'ZIP code:',
-      default: '90210'
+      message: 'ZIP/Postal code (required):',
+      validate: (input) => {
+        if (!input || input.trim().length === 0) {
+          return 'ZIP/Postal code is required';
+        }
+        // Basic ZIP code validation (5 digits or 5+4 format)
+        const zipRegex = /^\d{5}(-\d{4})?$/;
+        if (!zipRegex.test(input)) {
+          return 'Please enter a valid ZIP code (e.g., 12345 or 12345-6789)';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'input',
+      name: 'country',
+      message: 'Country (required):',
+      default: 'USA',
+      validate: (input) => {
+        if (!input || input.trim().length === 0) {
+          return 'Country is required';
+        }
+        return true;
+      }
     }
   ]);
 
@@ -133,16 +206,92 @@ async function createProjectInteractively(): Promise<any> {
     {
       type: 'input',
       name: 'spaceWidth',
-      message: 'Workspace width (feet):',
+      message: 'Workspace width in feet (required):',
       default: '10',
+      validate: (input) => {
+        const num = parseInt(input);
+        if (isNaN(num) || num <= 0) {
+          return 'Please enter a valid positive number';
+        }
+        if (num > 1000) {
+          return 'Please enter a reasonable width (less than 1000 feet)';
+        }
+        return true;
+      },
       filter: (input) => parseInt(input) || 10
     },
     {
       type: 'input',
       name: 'spaceLength',
-      message: 'Workspace length (feet):',
+      message: 'Workspace length in feet (required):',
       default: '10',
+      validate: (input) => {
+        const num = parseInt(input);
+        if (isNaN(num) || num <= 0) {
+          return 'Please enter a valid positive number';
+        }
+        if (num > 1000) {
+          return 'Please enter a reasonable length (less than 1000 feet)';
+        }
+        return true;
+      },
       filter: (input) => parseInt(input) || 10
+    }
+  ]);
+
+  // Budget information
+  const budgetInfo = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'budget',
+      message: 'What is your total budget in dollars? (required):',
+      default: '100',
+      validate: (input) => {
+        const num = parseFloat(input);
+        if (isNaN(num) || num <= 0) {
+          return 'Please enter a valid positive number';
+        }
+        if (num > 1000000) {
+          return 'Please enter a reasonable budget (less than $1,000,000)';
+        }
+        return true;
+      },
+      filter: (input) => Math.round(parseFloat(input) * 100) // Convert to cents
+    }
+  ]);
+
+  // Timeline information
+  const timelineInfo = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'startDate',
+      message: 'When do you want to start? (days from now, 0 = today):',
+      default: '0',
+      validate: (input) => {
+        const num = parseInt(input);
+        if (isNaN(num) || num < 0) {
+          return 'Please enter a valid number of days (0 or more)';
+        }
+        return true;
+      },
+      filter: (input) => parseInt(input) || 0
+    },
+    {
+      type: 'input',
+      name: 'duration',
+      message: 'How many days do you want to complete this project? (required):',
+      default: '7',
+      validate: (input) => {
+        const num = parseInt(input);
+        if (isNaN(num) || num <= 0) {
+          return 'Please enter a valid positive number';
+        }
+        if (num > 365) {
+          return 'Please enter a reasonable duration (less than 1 year)';
+        }
+        return true;
+      },
+      filter: (input) => parseInt(input) || 7
     }
   ]);
 
@@ -161,8 +310,8 @@ async function createProjectInteractively(): Promise<any> {
   // Generate tools list
   const tools = await aiGenerator.generateToolsForProject(projectSpec);
   
-  // Build the complete project object
-  const project = {
+  // Build the project object first (without task plan)
+  const projectWithoutPlan = {
     version: '0.0.0' as const,
     metadata: {
       createdAt: Date.now(),
@@ -200,15 +349,15 @@ async function createProjectInteractively(): Promise<any> {
         constraints: []
       },
       budget: {
-        total: { amount: 10000, currency: Currency.USD },
+        total: { amount: budgetInfo.budget, currency: Currency.USD },
         allocated: { amount: 0, currency: Currency.USD },
         spent: { amount: 0, currency: Currency.USD },
         currency: Currency.USD,
         breakdown: []
       },
       timeline: {
-        startDate: Date.now(),
-        targetEndDate: Date.now() + (7 * 24 * 60 * 60 * 1000),
+        startDate: Date.now() + (timelineInfo.startDate * 24 * 60 * 60 * 1000),
+        targetEndDate: Date.now() + (timelineInfo.duration * 24 * 60 * 60 * 1000),
         milestones: []
       }
     },
@@ -251,6 +400,64 @@ async function createProjectInteractively(): Promise<any> {
       generatedAt: Date.now()
     }
   };
+  
+  // Generate task plan
+  const taskPlan = await aiGenerator.generateTaskPlan(projectWithoutPlan as any);
+  
+  // Build the complete project object with task plan
+  const project = {
+    ...projectWithoutPlan,
+    state: {
+      ...projectWithoutPlan.state,
+      estimates: {
+        totalHours: taskPlan.estimatedDuration,
+        totalCost: taskPlan.estimatedCost,
+        perTask: taskPlan.tasks.reduce((acc: any, task: any) => {
+          acc[task.id] = { hours: task.estimatedHours, cost: task.estimatedCost };
+          return acc;
+        }, {}),
+        lastUpdated: Date.now()
+      }
+    },
+    plan: taskPlan
+  };
+
+  // Review project before creating
+  console.log(chalk.blue('\n📋 Project Review'));
+  console.log(chalk.gray('Please review the project details before creating the plan:\n'));
+  
+  console.log(chalk.cyan('🏗️  Project:'), basicInfo.name);
+  console.log(chalk.cyan('📝 Description:'), basicInfo.description);
+  console.log(chalk.cyan('📍 Location:'), `${locationInfo.street}, ${locationInfo.city}, ${locationInfo.state} ${locationInfo.zipCode}`);
+  console.log(chalk.cyan('💰 Budget:'), `$${(budgetInfo.budget / 100).toFixed(2)}`);
+  console.log(chalk.cyan('📅 Timeline:'), `${timelineInfo.duration} days starting ${timelineInfo.startDate === 0 ? 'today' : `in ${timelineInfo.startDate} days`}`);
+  console.log(chalk.cyan('🏠 Workspace:'), `${siteConditions.spaceWidth}' x ${siteConditions.spaceLength}' ${siteConditions.indoor ? 'indoor' : 'outdoor'}`);
+  console.log(chalk.cyan('⚡ Power:'), siteConditions.powerAvailable ? 'Available' : 'Not available');
+  
+  console.log(chalk.cyan('\n🔧 Required Tools:'), tools.length > 0 ? tools.map(t => t.name).join(', ') : 'None specified');
+  console.log(chalk.cyan('🎯 Project Type:'), `${projectSpec.category} (${projectSpec.complexity} complexity, ${projectSpec.scale} scale)`);
+  console.log(chalk.cyan('⚠️  Approval Points:'), project.policy.humanApprovalPoints.join(', '));
+  
+  console.log(chalk.cyan('\n📋 Generated Tasks:'), `${taskPlan.tasks.length} tasks`);
+  taskPlan.tasks.forEach((task: any, index: number) => {
+    console.log(chalk.gray(`  ${index + 1}. ${task.name} (${task.estimatedHours}h, $${(task.estimatedCost.amount / 100).toFixed(2)})`));
+  });
+  
+  console.log(chalk.cyan('\n💰 Total Estimate:'), `${taskPlan.estimatedDuration}h, $${(taskPlan.estimatedCost.amount / 100).toFixed(2)}`);
+
+  const { proceed } = await inquirer.prompt([
+    {
+      type: 'confirm',
+      name: 'proceed',
+      message: 'Create this project plan?',
+      default: true
+    }
+  ]);
+
+  if (!proceed) {
+    console.log(chalk.yellow('Project creation cancelled.'));
+    return;
+  }
 
   return project;
 }
