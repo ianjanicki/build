@@ -87,8 +87,8 @@ export async function run(planPath: string, options: RunOptions) {
   
   console.log(chalk.green('✓ Pre-execution checks passed\n'));
   
-  // Start execution
-  console.log(chalk.blue('🚀 Starting execution...'));
+  // Start execution with async state machine
+  console.log(chalk.blue('🚀 Starting async execution...\n'));
   
   const engine = new AsyncEngine();
   await engine.executeAsync(project, options);
@@ -167,287 +167,222 @@ async function performPreExecutionChecks(project: any, options: RunOptions): Pro
 }
 
 class AsyncEngine extends Engine {
-  async executeAsync(project: any, options: {
-    approveAll: boolean;
-    dryRun: boolean;
-    interactive: boolean;
-    modify: boolean;
-  }): Promise<void> {
-    console.log(chalk.blue('🔧 Starting async execution engine...'));
-
-    if (options.dryRun) {
-      console.log(chalk.yellow('🧪 DRY RUN MODE - No side effects will be performed'));
-    }
-
-    // Update project state
-    project.state.currentPhase = ProjectStatus.EXECUTE;
+  async executeAsync(project: any, options: { approveAll?: boolean; dryRun?: boolean; interactive?: boolean; modify?: boolean }): Promise<void> {
+    console.log(chalk.blue('🔄 Initializing async execution engine...'));
+    
+    // Update project state to EXECUTE
+    project.state.currentPhase = 'EXECUTE';
     project.metadata.lastModified = Date.now();
-
-    const taskPlan = project.plan;
-    const executedTasks = new Set<string>();
-    const taskMap = new Map(taskPlan.tasks.map((task: any) => [task.id, task]));
-
-    while (executedTasks.size < taskPlan.tasks.length) {
-      const readyTasks = this.getReadyTasks(taskPlan, executedTasks);
-
+    
+    // Track execution state
+    const executionState = {
+      currentTaskIndex: 0,
+      completedTasks: new Set<string>(),
+      blockedTasks: new Set<string>(),
+      pendingApprovals: new Set<string>(),
+      executionLog: [] as any[]
+    };
+    
+    // Show initial state
+    console.log(chalk.cyan('\n📊 Execution State:'));
+    console.log(chalk.gray(`   Phase: ${project.state.currentPhase}`));
+    console.log(chalk.gray(`   Tasks: ${project.plan.tasks.length} total`));
+    console.log(chalk.gray(`   Ready: ${this.getReadyTasks(project.plan, executionState.completedTasks).length}`));
+    console.log(chalk.gray(`   Blocked: ${executionState.blockedTasks.size}`));
+    
+    // Main execution loop
+    while (executionState.completedTasks.size < project.plan.tasks.length) {
+      const readyTasks = this.getReadyTasks(project.plan, executionState.completedTasks);
+      
       if (readyTasks.length === 0) {
-        console.log(chalk.red('❌ Circular dependency detected in task graph'));
+        console.log(chalk.red('\n❌ No tasks ready to execute. Possible circular dependency.'));
+        break;
+      }
+      
+      // Show current execution state
+      console.log(chalk.blue(`\n🔄 Execution Round ${Math.floor(executionState.completedTasks.size / readyTasks.length) + 1}`));
+      console.log(chalk.gray(`   Completed: ${executionState.completedTasks.size}/${project.plan.tasks.length}`));
+      console.log(chalk.gray(`   Ready: ${readyTasks.length} tasks`));
+      
+      // Execute ready tasks
+      for (const task of readyTasks) {
+        await this.executeTaskWithAsyncFlow(task, project, executionState, options);
+      }
+      
+      // Check for approval points
+      await this.checkApprovalPoints(project, executionState, options);
+      
+      // Small delay to show async nature
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
+    // Final state update
+    project.state.currentPhase = 'COMPLETED';
+    project.state.completedTasks = Array.from(executionState.completedTasks);
+    project.metadata.lastModified = Date.now();
+    
+    console.log(chalk.green('\n✅ Async execution completed!'));
+    console.log(chalk.cyan(`   Final Status: ${project.state.currentPhase}`));
+    console.log(chalk.cyan(`   Tasks Completed: ${executionState.completedTasks.size}`));
+    console.log(chalk.cyan(`   Execution Log Entries: ${executionState.executionLog.length}`));
+  }
+  
+  private async executeTaskWithAsyncFlow(task: any, project: any, executionState: any, options: any): Promise<void> {
+    console.log(chalk.cyan(`\n🔄 Executing: ${task.name}`));
+    console.log(chalk.gray(`   Status: ${task.status}`));
+    console.log(chalk.gray(`   Priority: ${task.priority}`));
+    console.log(chalk.gray(`   Dependencies: ${task.dependsOn.length > 0 ? task.dependsOn.join(', ') : 'None'}`));
+    
+    // Check if task requires approval
+    if (this.requiresApproval(task, project) && !options.approveAll) {
+      console.log(chalk.yellow(`   ⏸️  Task requires approval`));
+      
+      const { approved } = await inquirer.prompt([
+        {
+          type: 'confirm',
+          name: 'approved',
+          message: `Approve execution of "${task.name}"?`,
+          default: true
+        }
+      ]);
+      
+      if (!approved) {
+        console.log(chalk.yellow(`   ❌ Task execution cancelled by user`));
+        executionState.blockedTasks.add(task.id);
         return;
       }
-
-      // Execute tasks in parallel (or sequentially if interactive)
-      if (options.interactive) {
-        // Interactive mode - ask user which task to execute next
-        const { selectedTaskId } = await inquirer.prompt([
-          {
-            type: 'list',
-            name: 'selectedTaskId',
-            message: 'Which task would you like to execute next?',
-            choices: readyTasks.map(task => ({
-              name: `${task.name} (${task.estimatedHours}h, $${task.estimatedCost.amount / 100})`,
-              value: task.id
-            }))
-          }
-        ]);
-
-        const selectedTask = taskMap.get(selectedTaskId);
-        await this.executeTaskAsync(selectedTask, project, options);
-        executedTasks.add(selectedTaskId);
-      } else {
-        // Parallel execution
-        const executionPromises = readyTasks.map(task => 
-          this.executeTaskAsync(task, project, options)
-        );
-
-        await Promise.all(executionPromises);
-        readyTasks.forEach(task => executedTasks.add(task.id));
-      }
-
-      // Check for modifications if enabled
-      if (options.modify && !options.dryRun) {
-        const { shouldModify } = await inquirer.prompt([
-          {
-            type: 'confirm',
-            name: 'shouldModify',
-            message: 'Do you want to modify the remaining tasks?',
-            default: false
-          }
-        ]);
-
-        if (shouldModify) {
-          await this.modifyRemainingTasks(project, executedTasks);
-        }
-      }
     }
-
-    // Update final state
-    project.state.currentPhase = ProjectStatus.COMPLETED;
-    project.metadata.lastModified = Date.now();
-
-    console.log(chalk.green('✅ All tasks completed successfully!'));
-  }
-
-  private async executeTaskAsync(task: any, project: any, options: any): Promise<void> {
-    console.log(chalk.cyan(`\n🔄 Executing: ${task.name}`));
-    console.log(chalk.gray(`   ${task.description}`));
-
-    if (options.dryRun) {
-      console.log(chalk.gray(`   [DRY RUN] Would execute task: ${task.id}`));
-      return;
-    }
-
-    // Update task status
-    task.status = 'in_progress';
-    task.startTime = Date.now();
-
-    // Log execution start
-    project.state.executionLog.push({
-      id: `log_${Date.now()}`,
-      timestamp: Date.now(),
-      taskId: task.id,
-      action: 'started',
-      description: `Started executing ${task.name}`,
-      worker: 'system'
-    });
-
+    
+    // Show task details
+    console.log(chalk.gray(`   Estimated: ${task.estimatedHours}h, $${(task.estimatedCost.amount / 100).toFixed(2)}`));
+    console.log(chalk.gray(`   Skills: ${task.skills.join(', ')}`));
+    
+    // Simulate async execution with spinner
+    const spinner = this.createSpinner(`Executing ${task.name}...`);
+    spinner.start();
+    
     try {
-      // Execute the task (using existing logic)
+      // Simulate task execution time
+      const executionTime = Math.min(task.estimatedHours * 1000, 3000); // Max 3 seconds for demo
+      await new Promise(resolve => setTimeout(resolve, executionTime));
+      
+      // Execute the actual task
       await this.executeTask(task, project, options);
-
-      // Update task status
+      
+      spinner.succeed(`✅ ${task.name} completed`);
+      
+      // Update execution state
+      executionState.completedTasks.add(task.id);
       task.status = 'completed';
       task.endTime = Date.now();
-      task.actualHours = (task.endTime - task.startTime) / (1000 * 60 * 60); // Convert to hours
-
-      // Update project state
-      project.state.completedTasks.push(task.id);
-      project.state.executionLog.push({
-        id: `log_${Date.now()}`,
+      
+      // Log execution
+      executionState.executionLog.push({
         timestamp: Date.now(),
         taskId: task.id,
         action: 'completed',
-        description: `Completed ${task.name}`,
-        worker: 'system',
-        duration: task.actualHours * 3600 // Convert to seconds
+        duration: task.endTime - (task.startTime || Date.now())
       });
-
-      console.log(chalk.green(`   ✅ Completed: ${task.name}`));
-
+      
+      // Show task completion details
+      console.log(chalk.gray(`   Duration: ${((task.endTime - (task.startTime || Date.now())) / 1000).toFixed(1)}s`));
+      console.log(chalk.gray(`   Progress: ${executionState.completedTasks.size}/${project.plan.tasks.length} tasks completed`));
+      
     } catch (error) {
-      // Handle task failure
+      spinner.fail(`❌ ${task.name} failed`);
+      console.log(chalk.red(`   Error: ${error}`));
       task.status = 'failed';
-      task.endTime = Date.now();
-
-      project.state.executionLog.push({
-        id: `log_${Date.now()}`,
-        timestamp: Date.now(),
-        taskId: task.id,
-        action: 'failed',
-        description: `Failed to execute ${task.name}: ${error}`,
-        worker: 'system'
-      });
-
-      console.log(chalk.red(`   ❌ Failed: ${task.name}`));
-      throw error;
+      executionState.blockedTasks.add(task.id);
     }
   }
-
-  private async modifyRemainingTasks(project: any, executedTasks: Set<string>): Promise<void> {
-    const remainingTasks = project.plan.tasks.filter((task: any) => !executedTasks.has(task.id));
+  
+  private async checkApprovalPoints(project: any, executionState: any, options: any): Promise<void> {
+    const approvalPoints = project.policy.humanApprovalPoints;
     
-    if (remainingTasks.length === 0) {
-      console.log(chalk.gray('No remaining tasks to modify'));
-      return;
+    for (const approvalPoint of approvalPoints) {
+      if (executionState.pendingApprovals.has(approvalPoint)) {
+        continue; // Already handled
+      }
+      
+      // Check if this approval point should be triggered
+      if (this.shouldTriggerApproval(approvalPoint, project, executionState)) {
+        console.log(chalk.yellow(`\n⚠️  Approval Point: ${approvalPoint}`));
+        
+        if (!options.approveAll) {
+          const { approved } = await inquirer.prompt([
+            {
+              type: 'confirm',
+              name: 'approved',
+              message: `Approve ${approvalPoint}?`,
+              default: true
+            }
+          ]);
+          
+          if (!approved) {
+            console.log(chalk.yellow(`   ❌ ${approvalPoint} rejected by user`));
+            // Handle rejection - could pause execution or modify plan
+            return;
+          }
+        }
+        
+        console.log(chalk.green(`   ✅ ${approvalPoint} approved`));
+        executionState.pendingApprovals.add(approvalPoint);
+        
+        // Log approval
+        executionState.executionLog.push({
+          timestamp: Date.now(),
+          action: 'approval',
+          approvalPoint,
+          approved: true
+        });
+      }
     }
-
-    console.log(chalk.blue('\n🔧 Task Modification'));
-    console.log(chalk.gray('Remaining tasks:'));
+  }
+  
+  private requiresApproval(task: any, project: any): boolean {
+    // Check if task requires specific approval
+    return task.priority === 'critical' || 
+           task.estimatedCost.amount > 5000 || // High cost tasks
+           task.skills.includes('specialized');
+  }
+  
+  private shouldTriggerApproval(approvalPoint: string, project: any, executionState: any): boolean {
+    // Logic to determine when approval points should be triggered
+    switch (approvalPoint) {
+      case 'plan':
+        return executionState.completedTasks.size === 0; // At start
+      case 'labor_hire':
+        return project.plan.tasks.some((t: any) => 
+          t.skills.includes('labor') && !executionState.completedTasks.has(t.id)
+        );
+      default:
+        return false;
+    }
+  }
+  
+  private createSpinner(text: string): any {
+    // Simple spinner implementation
+    const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+    let i = 0;
+    let interval: NodeJS.Timeout | null = null;
     
-    for (const task of remainingTasks) {
-      console.log(chalk.white(`  • ${task.name} (${task.estimatedHours}h)`));
-    }
-
-    const { action } = await inquirer.prompt([
-      {
-        type: 'list',
-        name: 'action',
-        message: 'What would you like to do?',
-        choices: [
-          { name: 'Skip a task', value: 'skip' },
-          { name: 'Modify task estimates', value: 'estimate' },
-          { name: 'Add new task', value: 'add' },
-          { name: 'Continue without changes', value: 'continue' }
-        ]
-      }
-    ]);
-
-    switch (action) {
-      case 'skip':
-        await this.skipTask(remainingTasks);
-        break;
-      case 'estimate':
-        await this.modifyTaskEstimates(remainingTasks);
-        break;
-      case 'add':
-        await this.addNewTask(project);
-        break;
-      case 'continue':
-        console.log(chalk.gray('Continuing without modifications'));
-        break;
-    }
-  }
-
-  private async skipTask(remainingTasks: any[]): Promise<void> {
-    const { taskId } = await inquirer.prompt([
-      {
-        type: 'list',
-        name: 'taskId',
-        message: 'Which task would you like to skip?',
-        choices: remainingTasks.map(task => ({
-          name: task.name,
-          value: task.id
-        }))
-      }
-    ]);
-
-    const task = remainingTasks.find(t => t.id === taskId);
-    if (task) {
-      task.status = 'cancelled';
-      console.log(chalk.yellow(`Skipped task: ${task.name}`));
-    }
-  }
-
-  private async modifyTaskEstimates(remainingTasks: any[]): Promise<void> {
-    const { taskId } = await inquirer.prompt([
-      {
-        type: 'list',
-        name: 'taskId',
-        message: 'Which task would you like to modify?',
-        choices: remainingTasks.map(task => ({
-          name: `${task.name} (currently ${task.estimatedHours}h)`,
-          value: task.id
-        }))
-      }
-    ]);
-
-    const { newHours } = await inquirer.prompt([
-      {
-        type: 'number',
-        name: 'newHours',
-        message: 'New estimated hours:',
-        default: remainingTasks.find(t => t.id === taskId)?.estimatedHours
-      }
-    ]);
-
-    const task = remainingTasks.find(t => t.id === taskId);
-    if (task) {
-      task.estimatedHours = newHours;
-      console.log(chalk.green(`Updated ${task.name} to ${newHours}h`));
-    }
-  }
-
-  private async addNewTask(project: any): Promise<void> {
-    const { taskName, taskDescription, estimatedHours } = await inquirer.prompt([
-      {
-        type: 'input',
-        name: 'taskName',
-        message: 'Task name:'
+    const spinner = {
+      start: () => {
+        interval = setInterval(() => {
+          process.stdout.write(`\r${frames[i]} ${text}`);
+          i = (i + 1) % frames.length;
+        }, 80);
       },
-      {
-        type: 'input',
-        name: 'taskDescription',
-        message: 'Task description:'
+      succeed: (message: string) => {
+        if (interval) clearInterval(interval);
+        process.stdout.write(`\r${message}\n`);
       },
-      {
-        type: 'number',
-        name: 'estimatedHours',
-        message: 'Estimated hours:',
-        default: 1
+      fail: (message: string) => {
+        if (interval) clearInterval(interval);
+        process.stdout.write(`\r${message}\n`);
       }
-    ]);
-
-    const newTask = {
-      id: `task_${Date.now()}`,
-      name: taskName,
-      description: taskDescription,
-      status: 'pending',
-      priority: 'medium',
-      estimatedHours,
-      estimatedCost: { amount: estimatedHours * 3000, currency: 'USD' }, // $30/hour default
-      skills: ['general'],
-      materials: [],
-      tools: [],
-      safetyRequirements: [],
-      dependsOn: [],
-      blocks: [],
-      instructions: taskDescription,
-      checkpoints: [],
-      progress: 0,
-      notes: [],
-      evidence: []
     };
-
-    project.plan.tasks.push(newTask);
-    console.log(chalk.green(`Added new task: ${taskName}`));
+    
+    return spinner;
   }
 }
