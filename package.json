@@ -33,8 +33,8 @@
     "vitest": "^1.0.0"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^0.0.0",
-    "ai": "^3.4.33",
+    "@ai-sdk/openai": "^2.0.15",
+    "ai": "^5.0.15",
     "chalk": "^5.0.0",
     "cli-table3": "^0.6.3",
     "commander": "^11.0.0",

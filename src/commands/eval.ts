@@ -1,4 +1,4 @@
-import { MockAISchemaGenerator } from '../ai/mock-schema-generator'; // Used for fallback
+import { AISchemaGenerator } from '../ai/ai-schema-generator'; // Used for fallback
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { readFileSync, existsSync } from 'fs';
@@ -53,7 +53,7 @@ export class EvaluationRunner {
       console.log(chalk.blue(`\n🧪 Running evaluation: ${evaluation.name}`));
       
       // Use mock generator for now
-      const aiGenerator = new MockAISchemaGenerator();
+                        const aiGenerator = new AISchemaGenerator();
       
       // Generate project spec from prompt
       const projectSpec = await aiGenerator.generateProjectSpec(evaluation.prompt);

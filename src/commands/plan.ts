@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import inquirer from 'inquirer';
-import { MockAISchemaGenerator } from '../ai/mock-schema-generator';
+import { AISchemaGenerator } from '../ai/ai-schema-generator';
 import { ProjectManager } from '../utils/project-manager';
 import { Estimator } from '../agents/estimator';
 import { ProjectSchema } from '../schemas/v0';
@@ -55,8 +55,8 @@ export async function plan(projectPath: string | undefined, options: PlanOptions
       const project = loadProject(projectPath);
       console.log(chalk.blue(`📋 Enhancing existing project: ${project.project.name}`));
       
-      // For now, use mock generator until AI SDK integration is complete
-      const aiGenerator = new MockAISchemaGenerator();
+      // Use real AI generator for enhanced planning
+      const aiGenerator = new AISchemaGenerator();
       
       // Generate enhanced task plan
       const taskPlan = await aiGenerator.generateTaskPlan(project);
@@ -295,8 +295,8 @@ async function createProjectInteractively(): Promise<any> {
     }
   ]);
 
-  // For now, use mock generator until AI SDK integration is complete
-  const aiGenerator = new MockAISchemaGenerator();
+  // Use real AI generator for project planning
+  const aiGenerator = new AISchemaGenerator();
   
   // Generate project spec from description
   const projectSpec = await aiGenerator.generateProjectSpec(basicInfo.description);
