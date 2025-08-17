@@ -121,7 +121,11 @@ export class EvaluationRunner {
         hasSafetyRequirements: taskPlan.tasks.some(task => 
           task.safetyRequirements && task.safetyRequirements.length > 0
         ),
-        hasDependencies: taskPlan.dependencies.length > 0
+        hasDependencies: taskPlan.dependencies.length > 0,
+        // Add missing fields that evaluations expect
+        taskCount: taskPlan.tasks.length,
+        requiredSkills: Array.from(new Set(taskPlan.tasks.flatMap(task => task.skills))),
+        constraints: projectSpec.constraints.map((c: any) => c.type)
       };
       
       // Evaluate against criteria
@@ -158,7 +162,13 @@ export class EvaluationRunner {
       let passed = false;
       let notes = '';
       
-      if (typeof expected === 'number') {
+      if (typeof expected === 'object' && expected !== null && 'min' in expected && 'max' in expected) {
+        // Handle min/max range objects
+        const min = expected.min;
+        const max = expected.max;
+        passed = actual >= min && actual <= max;
+        notes = `Expected ${min}-${max}, got ${actual}`;
+      } else if (typeof expected === 'number') {
         // Allow 20% tolerance for numerical values
         const tolerance = expected * 0.2;
         passed = Math.abs(actual - expected) <= tolerance;
@@ -166,6 +176,10 @@ export class EvaluationRunner {
       } else if (typeof expected === 'boolean') {
         passed = actual === expected;
         notes = `Expected ${expected}, got ${actual}`;
+      } else if (Array.isArray(expected)) {
+        // Handle array comparisons (like requiredSkills, constraints)
+        passed = Array.isArray(actual) && expected.every(item => actual.includes(item));
+        notes = `Expected ${expected.join(', ')}, got ${Array.isArray(actual) ? actual.join(', ') : actual}`;
       } else {
         passed = actual === expected;
         notes = `Expected ${expected}, got ${actual}`;
@@ -220,8 +234,29 @@ export class EvaluationRunner {
         console.log(chalk.red(`❌ ${evaluation.name} - FAILED`));
         if (result.error) {
           console.log(chalk.red(`   Error: ${result.error}`));
+        } else {
+          // Show why it failed
+          const failedCriteria = result.criteriaResults.filter(c => !c.passed);
+          if (failedCriteria.length > 0) {
+            console.log(chalk.gray(`   Failed criteria:`));
+            failedCriteria.slice(0, 3).forEach(c => {
+              console.log(chalk.gray(`     - ${c.criterion}: ${c.notes}`));
+            });
+            if (failedCriteria.length > 3) {
+              console.log(chalk.gray(`     ... and ${failedCriteria.length - 3} more`));
+            }
+          }
         }
       }
+    }
+    
+    // Summary
+    const passed = results.filter(r => r.passed).length;
+    const failed = results.filter(r => !r.passed).length;
+    console.log(chalk.blue(`\n📊 Summary: ${passed} passed, ${failed} failed`));
+    
+    if (failed > 0) {
+      console.log(chalk.yellow('💡 Tip: Evaluations may fail with mock data. Set up real AI integration for accurate results.'));
     }
     
     return results;
@@ -267,6 +302,10 @@ export class EvaluationRunner {
 }
 
 export async function runEvaluations() {
+  console.log(chalk.yellow('⚠️  Running evaluations with Mock AI Generator'));
+  console.log(chalk.gray('   Evaluations may fail because mock data doesn\'t match expected outcomes'));
+  console.log(chalk.gray('   Set up real AI SDK integration for accurate evaluations\n'));
+  
   const runner = new EvaluationRunner();
   
   if (runner['evaluations'].length === 0) {

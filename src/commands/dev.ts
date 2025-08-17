@@ -17,7 +17,7 @@ interface PlanInfo {
 
 export async function dev() {
   console.log(chalk.blue('🏗️  Build Agent'));
-  console.log(chalk.gray('Agent orchestration platform for physical world tasks\n'));
+  console.log(chalk.gray('Agent orchestration platform\n'));
 
   const plans = getAvailablePlans();
   
@@ -30,7 +30,7 @@ export async function dev() {
   const choices = [
     { name: '📋 Create new plan', value: 'new' },
     ...plans.map(p => ({
-      name: `[${p.status}] ${p.name} - ${p.description}`,
+      name: `[${p.status}] ${p.name}`,
       value: { plan: p, action: 'execute' }
     })),
     { name: '🧪 Run evaluations', value: 'test' }
@@ -40,7 +40,7 @@ export async function dev() {
     {
       type: 'list',
       name: 'selected',
-      message: 'Select a plan or action:',
+      message: 'Select action:',
       choices
     }
   ]);
@@ -58,76 +58,49 @@ export async function dev() {
 
 
 async function executePlan(planInfo: PlanInfo) {
-  console.log(chalk.blue(`\n🚀 Executing: ${planInfo.name}`));
-  
-  // Handle different plan statuses
-  if (planInfo.status === ProjectStatus.EXECUTE) {
-    console.log(chalk.yellow('⚠️  Plan is currently in progress.'));
-    const { shouldContinue } = await inquirer.prompt([
-      {
-        type: 'confirm',
-        name: 'shouldContinue',
-        message: 'Continue from where left off?',
-        default: true
-      }
-    ]);
-    if (!shouldContinue) return;
-  }
+  console.log(chalk.blue(`\n📋 ${planInfo.name}`));
   
   if (planInfo.status === ProjectStatus.COMPLETED) {
-    const { restartType } = await inquirer.prompt([
+    console.log(chalk.gray('This plan has been completed.'));
+    const { action } = await inquirer.prompt([
       {
         type: 'list',
-        name: 'restartType',
-        message: 'Plan is completed. How to proceed?',
+        name: 'action',
+        message: 'What would you like to do?',
         choices: [
-          { name: 'Start from beginning (reset progress)', value: 'beginning' },
-          { name: 'Continue from where left off', value: 'continue' },
-          { name: 'Cancel', value: 'cancel' }
+          { name: '🔄 Restart execution', value: 'restart' },
+          { name: '⬅️  Back to menu', value: 'back' }
         ]
       }
     ]);
     
-    if (restartType === 'cancel') return;
-    if (restartType === 'beginning') {
-      try {
-        const planData = JSON.parse(readFileSync(planInfo.path, 'utf-8'));
-        planData.state.currentPhase = ProjectStatus.PLAN;
-        planData.state.completedTasks = [];
-        planData.state.executionLog = [];
-        
-        const fs = await import('fs');
-        fs.writeFileSync(planInfo.path, JSON.stringify(planData, null, 2));
-        console.log(chalk.green('Plan reset to beginning.'));
-      } catch (error) {
-        console.error(chalk.red('Failed to reset plan:', error));
-        return;
+    if (action === 'restart') {
+      await run(planInfo.path, { approveAll: true, dryRun: false });
+    }
+  } else if (planInfo.status === ProjectStatus.EXECUTE) {
+    console.log(chalk.yellow('⚠️  This plan is currently executing.'));
+    const { action } = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'action',
+        message: 'What would you like to do?',
+        choices: [
+          { name: '▶️  Continue execution', value: 'continue' },
+          { name: '🔄 Restart from beginning', value: 'restart' },
+          { name: '⬅️  Back to menu', value: 'back' }
+        ]
       }
+    ]);
+    
+    if (action === 'continue') {
+      await run(planInfo.path, { approveAll: true, dryRun: false });
+    } else if (action === 'restart') {
+      await run(planInfo.path, { approveAll: true, dryRun: false });
     }
+  } else {
+    // PLAN status - ready to execute
+    await run(planInfo.path, { approveAll: true, dryRun: false });
   }
-  
-  const { options } = await inquirer.prompt([
-    {
-      type: 'checkbox',
-      name: 'options',
-      message: 'Execution options:',
-      choices: [
-        { name: 'Dry run (no side effects)', value: 'dryRun' },
-        { name: 'Interactive mode (choose tasks manually)', value: 'interactive' },
-        { name: 'Allow in-flight modifications', value: 'modify' },
-        { name: 'Auto-approve all decisions', value: 'approveAll' }
-      ]
-    }
-  ]);
-
-  const runOptions = {
-    dryRun: options.includes('dryRun'),
-    interactive: options.includes('interactive'),
-    modify: options.includes('modify'),
-    approveAll: options.includes('approveAll')
-  };
-
-  await run(planInfo.path, runOptions);
 }
 
 

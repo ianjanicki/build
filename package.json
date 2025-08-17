@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/cli.ts dev",
-    "start": "node dist/cli.js",
+    "start": "tsx src/cli.ts",
     "test": "vitest",
     "eval": "tsx src/cli.ts eval",
     "plan": "tsx src/cli.ts plan --interactive",

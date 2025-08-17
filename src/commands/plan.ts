@@ -3,6 +3,9 @@ import inquirer from 'inquirer';
 import { MockAISchemaGenerator } from '../ai/mock-schema-generator';
 import { ProjectManager } from '../utils/project-manager';
 import { Estimator } from '../agents/estimator';
+import { ProjectSchema } from '../schemas/v0';
+import { readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { join, dirname } from 'path';
 import { ProjectStatus, Currency } from '../types';
 
 interface PlanOptions {
@@ -10,75 +13,66 @@ interface PlanOptions {
   output?: string;
 }
 
+function loadProject(projectPath: string): any {
+  const content = readFileSync(projectPath, 'utf-8');
+  const data = JSON.parse(content);
+  return ProjectSchema.parse(data);
+}
+
+function saveProject(project: any, outputPath: string): void {
+  // Ensure directory exists
+  const dir = dirname(outputPath);
+  mkdirSync(dir, { recursive: true });
+  
+  // Save project
+  writeFileSync(outputPath, JSON.stringify(project, null, 2));
+}
+
 export async function plan(projectPath: string | undefined, options: PlanOptions) {
-  console.log(chalk.blue('📋 Build Agent - Plan Generator'));
-  console.log(chalk.gray('Creating detailed project plans...\n'));
-
-  let project: any;
-
-  if (options.interactive) {
-    project = await createProjectInteractively();
-  } else if (projectPath) {
-    // Load existing project and enhance it
-    project = await loadAndEnhanceProject(projectPath);
-  } else {
-    throw new Error('Please provide a project file path or use --interactive');
+  // If project path is provided, load and enhance existing project
+  if (projectPath) {
+    try {
+      const project = loadProject(projectPath);
+      console.log(chalk.blue(`📋 Enhancing existing project: ${project.project.name}`));
+      
+      // For now, use mock generator until AI SDK integration is complete
+      const aiGenerator = new MockAISchemaGenerator();
+      
+      // Generate enhanced task plan
+      const taskPlan = await aiGenerator.generateTaskPlan(project);
+      project.plan = taskPlan;
+      project.state.currentPhase = ProjectStatus.PLAN;
+      project.metadata.lastModified = Date.now();
+      
+      // Save enhanced project
+      const outputPath = options.output || projectPath;
+      saveProject(project, outputPath);
+      
+      console.log(chalk.green(`✅ Project enhanced and saved to: ${outputPath}`));
+      return;
+    } catch (error) {
+      console.error(chalk.red('Error loading project:'), error);
+      process.exit(1);
+    }
   }
 
-  // Generate enhanced plan
-  // For now, use mock generator until AI SDK integration is complete
-  const aiGenerator = new MockAISchemaGenerator();
-  const projectManager = new ProjectManager();
+  // Interactive project creation
+  if (options.interactive) {
+    const project = await createProjectInteractively();
+    const outputPath = options.output || `./.output/${project.project.name.toLowerCase().replace(/\s+/g, '_')}/project.json`;
+    saveProject(project, outputPath);
+    
+    console.log(chalk.green(`✅ Project created and saved to: ${outputPath}`));
+    return;
+  }
 
-  console.log(chalk.blue('🤖 Generating enhanced project specification...'));
-  const enhancedSpec = await aiGenerator.generateProjectSpec(project.project.description);
-  project.spec = { ...project.spec, ...enhancedSpec };
-
-  console.log(chalk.blue('📋 Generating detailed task plan...'));
-  const taskPlan = await aiGenerator.generateTaskPlan(project as any);
-  project.plan = taskPlan as any;
-
-  console.log(chalk.blue('💰 Calculating estimates...'));
-  const estimator = new Estimator();
-  const estimatedPlan = await estimator.estimate(taskPlan as any, project as any);
-  project.plan = estimatedPlan as any;
-
-  // Update project state
-  project.state.currentPhase = ProjectStatus.PLAN;
-  project.state.estimates = {
-    totalHours: estimatedPlan.estimatedDuration,
-    totalCost: estimatedPlan.estimatedCost,
-    perTask: estimatedPlan.tasks.reduce((acc: any, task: any) => {
-      acc[task.id] = { hours: task.estimatedHours, cost: task.estimatedCost };
-      return acc;
-    }, {}),
-    lastUpdated: Date.now()
-  };
-
-  // Save plan
-  const projectDir = projectManager.createProjectDirectory(project.project.name);
-  const planPath = projectManager.saveProjectSchema(projectDir, project as any);
-
-  console.log(chalk.green('\n✅ Plan generated successfully!'));
-  console.log(chalk.cyan(`📁 Plan saved to: ${planPath}`));
-
-  // Display plan summary
-  displayPlanSummary(estimatedPlan, project as any);
-
-  console.log(chalk.yellow('\n💡 Next steps:'));
-  console.log(chalk.gray('  • Review the plan in the generated JSON file'));
-  console.log(chalk.gray('  • Use "build run <plan-file>" to execute the plan'));
-  console.log(chalk.gray('  • Use "build modify <plan-file>" to adjust the plan'));
+  // Non-interactive mode requires project path
+  console.error(chalk.red('Error: Project path required for non-interactive mode'));
+  process.exit(1);
 }
 
 async function createProjectInteractively(): Promise<any> {
-  console.log(chalk.blue('🏗️  Interactive Project Planning'));
-  console.log(chalk.gray('Let\'s create a detailed project plan...\n'));
-
-  // For now, use mock generator until AI SDK integration is complete
-  const aiGenerator = new MockAISchemaGenerator();
-
-  // Step 1: Basic project information
+  // Basic project information
   const basicInfo = await inquirer.prompt([
     {
       type: 'input',
@@ -89,17 +83,12 @@ async function createProjectInteractively(): Promise<any> {
     {
       type: 'input',
       name: 'description',
-      message: 'Describe your project in detail:',
-      default: 'A simple assembly project'
+      message: 'Describe your project:',
+      default: 'A new project'
     }
   ]);
 
-  // Step 2: Generate initial spec
-  console.log(chalk.blue('\n🤖 Analyzing project requirements...'));
-  const projectSpec = await aiGenerator.generateProjectSpec(basicInfo.description);
-
-  // Step 3: Location and access
-  console.log(chalk.blue('\n📍 Location & Access'));
+  // Location information
   const locationInfo = await inquirer.prompt([
     {
       type: 'input',
@@ -111,7 +100,7 @@ async function createProjectInteractively(): Promise<any> {
       type: 'input',
       name: 'city',
       message: 'City:',
-      default: 'Your City'
+      default: 'Anytown'
     },
     {
       type: 'input',
@@ -122,31 +111,12 @@ async function createProjectInteractively(): Promise<any> {
     {
       type: 'input',
       name: 'zipCode',
-      message: 'ZIP Code:',
+      message: 'ZIP code:',
       default: '90210'
-    },
-    {
-      type: 'list',
-      name: 'entryMethod',
-      message: 'How can workers access the site?',
-      choices: [
-        { name: 'Key provided', value: 'key' },
-        { name: 'Door unlocked', value: 'unlocked' },
-        { name: 'Access code', value: 'code' },
-        { name: 'Meet on site', value: 'meet' },
-        { name: 'Call when arriving', value: 'call' }
-      ]
-    },
-    {
-      type: 'confirm',
-      name: 'parkingAvailable',
-      message: 'Is parking available for workers?',
-      default: true
     }
   ]);
 
-  // Step 4: Site conditions
-  console.log(chalk.blue('\n🏠 Site Conditions'));
+  // Site conditions
   const siteConditions = await inquirer.prompt([
     {
       type: 'confirm',
@@ -156,94 +126,67 @@ async function createProjectInteractively(): Promise<any> {
     },
     {
       type: 'confirm',
-      name: 'climateControlled',
-      message: 'Is the space climate controlled?',
+      name: 'powerAvailable',
+      message: 'Is power available?',
       default: true
     },
     {
       type: 'input',
       name: 'spaceWidth',
-      message: 'Available workspace width (feet):',
+      message: 'Workspace width (feet):',
       default: '10',
       filter: (input) => parseInt(input) || 10
     },
     {
       type: 'input',
       name: 'spaceLength',
-      message: 'Available workspace length (feet):',
+      message: 'Workspace length (feet):',
       default: '10',
       filter: (input) => parseInt(input) || 10
-    },
-    {
-      type: 'confirm',
-      name: 'powerAvailable',
-      message: 'Is electrical power available?',
-      default: true
-    },
-    {
-      type: 'confirm',
-      name: 'waterAvailable',
-      message: 'Is water available?',
-      default: true
     }
   ]);
 
-  // Step 5: AI-generated follow-up questions
-  console.log(chalk.blue('\n🤖 AI-Generated Follow-up Questions'));
+  // For now, use mock generator until AI SDK integration is complete
+  const aiGenerator = new MockAISchemaGenerator();
+  
+  // Generate project spec from description
+  const projectSpec = await aiGenerator.generateProjectSpec(basicInfo.description);
+  
+  // Generate follow-up questions based on spec and site conditions
   const followUpQuestions = await aiGenerator.generateFollowUpQuestions(projectSpec, siteConditions);
   
-  console.log(chalk.gray(`\nAI Reasoning: ${followUpQuestions.reasoning}`));
+  // Ask follow-up questions
+  const followUpAnswers = await inquirer.prompt(followUpQuestions.questions);
   
-  const answers = await inquirer.prompt(followUpQuestions.questions);
-
-  // Step 6: Budget
-  console.log(chalk.blue('\n💰 Budget'));
-  const budgetInfo = await inquirer.prompt([
-    {
-      type: 'number',
-      name: 'budget',
-      message: 'What\'s your total budget (in dollars)?',
-      default: 100,
-      filter: (input) => Math.round(input * 100) // Convert to cents
-    }
-  ]);
-
-  // Step 7: Generate tools list
-  console.log(chalk.blue('\n🔧 Analyzing tool requirements...'));
+  // Generate tools list
   const tools = await aiGenerator.generateToolsForProject(projectSpec);
-
-  // Build the project object
+  
+  // Build the complete project object
   const project = {
-    version: '0.0.0',
+    version: '0.0.0' as const,
     metadata: {
       createdAt: Date.now(),
       lastModified: Date.now(),
-      createdBy: 'interactive-user',
+      createdBy: 'interactive',
       status: ProjectStatus.PLAN,
-      version: '0.0.0'
+      version: '0.0.0' as const
     },
     project: {
       name: basicInfo.name,
       description: basicInfo.description,
       location: {
-        address: {
-          street: locationInfo.street,
-          city: locationInfo.city,
-          state: locationInfo.state,
-          zipCode: locationInfo.zipCode,
-          country: 'USA'
-        },
+        address: locationInfo,
         access: {
-          entryMethod: locationInfo.entryMethod,
-          parkingAvailable: locationInfo.parkingAvailable,
+          entryMethod: 'key',
+          parkingAvailable: true,
           elevatorAccess: false
         },
         siteConditions: {
           indoor: siteConditions.indoor,
-          climateControlled: siteConditions.climateControlled,
+          climateControlled: true,
           lighting: 'natural',
           powerAvailable: siteConditions.powerAvailable,
-          waterAvailable: siteConditions.waterAvailable,
+          waterAvailable: true,
           spaceDimensions: {
             width: siteConditions.spaceWidth,
             length: siteConditions.spaceLength,
@@ -254,7 +197,7 @@ async function createProjectInteractively(): Promise<any> {
         constraints: []
       },
       budget: {
-        total: { amount: budgetInfo.budget, currency: Currency.USD },
+        total: { amount: 10000, currency: Currency.USD },
         allocated: { amount: 0, currency: Currency.USD },
         spent: { amount: 0, currency: Currency.USD },
         currency: Currency.USD,
@@ -262,14 +205,11 @@ async function createProjectInteractively(): Promise<any> {
       },
       timeline: {
         startDate: Date.now(),
-        targetEndDate: Date.now() + (7 * 24 * 60 * 60 * 1000), // 1 week from now
+        targetEndDate: Date.now() + (7 * 24 * 60 * 60 * 1000),
         milestones: []
       }
     },
-    spec: {
-      ...projectSpec,
-      tools: tools
-    },
+    spec: projectSpec,
     policy: {
       humanApprovalPoints: ['plan', 'labor_hire'],
       riskLevel: 'low',
