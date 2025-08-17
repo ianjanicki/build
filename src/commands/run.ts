@@ -237,14 +237,7 @@ class AsyncEngine extends Engine {
     if (this.requiresApproval(task, project) && !options.approveAll) {
       console.log(chalk.yellow(`   ⏸️  Task requires approval`));
       
-      const { approved } = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'approved',
-          message: `Approve execution of "${task.name}"?`,
-          default: true
-        }
-      ]);
+      const approved = await this.handleTaskApproval(task, project, executionState);
       
       if (!approved) {
         console.log(chalk.yellow(`   ❌ Task execution cancelled by user`));
@@ -309,14 +302,7 @@ class AsyncEngine extends Engine {
         console.log(chalk.yellow(`\n⚠️  Approval Point: ${approvalPoint}`));
         
         if (!options.approveAll) {
-          const { approved } = await inquirer.prompt([
-            {
-              type: 'confirm',
-              name: 'approved',
-              message: `Approve ${approvalPoint}?`,
-              default: true
-            }
-          ]);
+          const approved = await this.handleApprovalPoint(approvalPoint, project, executionState);
           
           if (!approved) {
             console.log(chalk.yellow(`   ❌ ${approvalPoint} rejected by user`));
@@ -339,11 +325,169 @@ class AsyncEngine extends Engine {
     }
   }
   
+  private async handleApprovalPoint(approvalPoint: string, project: any, executionState: any): Promise<boolean> {
+    switch (approvalPoint) {
+      case 'plan':
+        return await this.handlePlanApproval(project);
+      case 'labor_hire':
+        return await this.handleLaborHireApproval(project, executionState);
+      default:
+        const { approved } = await inquirer.prompt([
+          {
+            type: 'confirm',
+            name: 'approved',
+            message: `Approve ${approvalPoint}?`,
+            default: true
+          }
+        ]);
+        return approved;
+    }
+  }
+  
+  private async handlePlanApproval(project: any): Promise<boolean> {
+    console.log(chalk.blue('\n📋 Plan Review Required'));
+    console.log(chalk.gray('Please review the project plan before execution:'));
+    console.log(chalk.cyan('   Project:'), project.project.name);
+    console.log(chalk.cyan('   Budget:'), `$${(project.project.budget.total.amount / 100).toFixed(2)}`);
+    console.log(chalk.cyan('   Timeline:'), `${Math.ceil((project.project.timeline.targetEndDate - project.project.timeline.startDate) / (24 * 60 * 60 * 1000))} days`);
+    console.log(chalk.cyan('   Tasks:'), `${project.plan.tasks.length} tasks`);
+    console.log(chalk.cyan('   Estimated Cost:'), `$${(project.plan.estimatedCost.amount / 100).toFixed(2)}`);
+    
+    const { approved } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'approved',
+        message: 'Do you approve this project plan to proceed with execution?',
+        default: true
+      }
+    ]);
+    
+    return approved;
+  }
+  
+  private async handleLaborHireApproval(project: any, executionState: any): Promise<boolean> {
+    console.log(chalk.blue('\n👷 Labor Hire Approval Required'));
+    console.log(chalk.gray('Available bids for assembly work:'));
+    
+    // Simulate getting bids from labor marketplace
+    const bids = [
+      {
+        provider: 'FurnitureMaster Pro',
+        price: { amount: 8363, currency: 'USD' },
+        estimated_hours: 2,
+        earliest_start: '2024-01-15T10:00:00Z',
+        qualifications: ['Furniture Assembly', 'IKEA Specialist', '5+ years experience'],
+        rating: 4.8
+      },
+      {
+        provider: 'QuickAssemble Co',
+        price: { amount: 6500, currency: 'USD' },
+        estimated_hours: 1.5,
+        earliest_start: '2024-01-15T14:00:00Z',
+        qualifications: ['General Assembly', 'Fast Service'],
+        rating: 4.2
+      },
+      {
+        provider: 'HandyHome Services',
+        price: { amount: 9500, currency: 'USD' },
+        estimated_hours: 2.5,
+        earliest_start: '2024-01-15T09:00:00Z',
+        qualifications: ['Premium Service', 'Guaranteed Quality', 'Cleanup Included'],
+        rating: 4.9
+      }
+    ];
+    
+    // Display bids
+    bids.forEach((bid, index) => {
+      console.log(chalk.cyan(`\n   ${index + 1}. ${bid.provider}`));
+      console.log(chalk.gray(`      Price: $${(bid.price.amount / 100).toFixed(2)}`));
+      console.log(chalk.gray(`      Hours: ${bid.estimated_hours}h`));
+      console.log(chalk.gray(`      Rating: ${bid.rating}/5.0`));
+      console.log(chalk.gray(`      Available: ${new Date(bid.earliest_start).toLocaleString()}`));
+      console.log(chalk.gray(`      Qualifications: ${bid.qualifications.join(', ')}`));
+    });
+    
+    const { selectedBid, approved } = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'selectedBid',
+        message: 'Which bid would you like to accept?',
+        choices: [
+          ...bids.map((bid, index) => ({
+            name: `${bid.provider} - $${(bid.price.amount / 100).toFixed(2)} (${bid.rating}/5.0)`,
+            value: index
+          })),
+          { name: '❌ Reject all bids', value: -1 }
+        ]
+      },
+      {
+        type: 'confirm',
+        name: 'approved',
+        message: 'Confirm this labor hire decision?',
+        default: true,
+        when: (answers) => answers.selectedBid !== -1
+      }
+    ]);
+    
+    if (selectedBid === -1) {
+      console.log(chalk.yellow('   ❌ Labor hire rejected - no bids accepted'));
+      return false;
+    }
+    
+    if (approved) {
+      const selected = bids[selectedBid];
+      console.log(chalk.green(`   ✅ Selected: ${selected.provider} for $${(selected.price.amount / 100).toFixed(2)}`));
+      
+      // Store the selected bid for later use
+      executionState.selectedLaborBid = selected;
+    }
+    
+    return approved;
+  }
+  
+  private async handleTaskApproval(task: any, project: any, executionState: any): Promise<boolean> {
+    console.log(chalk.blue(`\n🔍 Task Approval Required: ${task.name}`));
+    console.log(chalk.gray('Task details:'));
+    console.log(chalk.cyan('   Description:'), task.description);
+    console.log(chalk.cyan('   Priority:'), task.priority);
+    console.log(chalk.cyan('   Estimated Cost:'), `$${(task.estimatedCost.amount / 100).toFixed(2)}`);
+    console.log(chalk.cyan('   Skills Required:'), task.skills.join(', '));
+    
+    // Show different approval options based on task type
+    if (task.skills.includes('assembly')) {
+      console.log(chalk.yellow('\n   📸 Assembly tasks typically require:'));
+      console.log(chalk.gray('   • Photos of completed work'));
+      console.log(chalk.gray('   • Quality checklist completion'));
+      console.log(chalk.gray('   • Material usage confirmation'));
+    }
+    
+    if (task.skills.includes('labor')) {
+      console.log(chalk.yellow('\n   👷 Labor tasks typically require:'));
+      console.log(chalk.gray('   • Worker verification'));
+      console.log(chalk.gray('   • Time tracking confirmation'));
+      console.log(chalk.gray('   • Work quality assessment'));
+    }
+    
+    const { approved } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'approved',
+        message: `Approve execution of "${task.name}"?`,
+        default: true
+      }
+    ]);
+    
+    return approved;
+  }
+  
   private requiresApproval(task: any, project: any): boolean {
     // Check if task requires specific approval
     return task.priority === 'critical' || 
-           task.estimatedCost.amount > 5000 || // High cost tasks
-           task.skills.includes('specialized');
+           task.priority === 'high' ||
+           task.estimatedCost.amount > 2000 || // Lower threshold for more approvals
+           task.skills.includes('specialized') ||
+           task.skills.includes('assembly') || // Assembly tasks often need approval
+           task.skills.includes('labor');
   }
   
   private shouldTriggerApproval(approvalPoint: string, project: any, executionState: any): boolean {
@@ -352,8 +496,10 @@ class AsyncEngine extends Engine {
       case 'plan':
         return executionState.completedTasks.size === 0; // At start
       case 'labor_hire':
-        return project.plan.tasks.some((t: any) => 
-          t.skills.includes('labor') && !executionState.completedTasks.has(t.id)
+        // Trigger when we're about to execute a task that requires labor
+        const readyTasks = this.getReadyTasks(project.plan, executionState.completedTasks);
+        return readyTasks.some((t: any) => 
+          t.skills.includes('labor') || t.skills.includes('assembly')
         );
       default:
         return false;

@@ -79,7 +79,7 @@ async function executePlan(planInfo: PlanInfo) {
     ]);
     
     if (action === 'restart') {
-      await run(planInfo.path, { approveAll: true, dryRun: false });
+      await run(planInfo.path, { approveAll: false, dryRun: false });
     }
   } else if (planInfo.status === ProjectStatus.EXECUTE) {
     console.log(chalk.yellow('⚠️  This plan is currently executing.'));
@@ -97,13 +97,13 @@ async function executePlan(planInfo: PlanInfo) {
     ]);
     
     if (action === 'continue') {
-      await run(planInfo.path, { approveAll: true, dryRun: false });
+      await run(planInfo.path, { approveAll: false, dryRun: false });
     } else if (action === 'restart') {
-      await run(planInfo.path, { approveAll: true, dryRun: false });
+      await run(planInfo.path, { approveAll: false, dryRun: false });
     }
   } else {
     // PLAN status - ready to execute
-    await run(planInfo.path, { approveAll: true, dryRun: false });
+    await run(planInfo.path, { approveAll: false, dryRun: false });
   }
 }
 
