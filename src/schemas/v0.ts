@@ -21,7 +21,7 @@ export const ProjectSchema = z.object({
         city: z.string(),
         state: z.string(),
         zipCode: z.string(),
-        country: z.string(),
+        country: z.string().optional(),
         coordinates: z.object({
           latitude: z.number(),
           longitude: z.number(),

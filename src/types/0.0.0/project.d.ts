@@ -53,7 +53,7 @@ export interface Address {
   city: string;
   state: string;
   zipCode: string;
-  country: string;
+  country?: string;  // Made optional for backward compatibility
   coordinates?: {
     latitude: number;
     longitude: number;

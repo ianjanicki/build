@@ -175,7 +175,10 @@ async function createProjectInteractively(): Promise<any> {
       name: basicInfo.name,
       description: basicInfo.description,
       location: {
-        address: locationInfo,
+        address: {
+          ...locationInfo,
+          country: 'USA'
+        },
         access: {
           entryMethod: 'key',
           parkingAvailable: true,
